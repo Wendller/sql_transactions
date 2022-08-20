@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS accounts(
  
 
 -- Criando tipo de transação
-CREATE TYPE transaction_type AS ENUM ('deposit', 'withdraw', 'ticket_payment', 'transfer_to_bank', 'transfer_from_bank');
+CREATE TYPE transaction_type AS ENUM ('deposit', 'withdraw', 'ticket_payment', 'transfer_payment', 'transfer_receipt');
 
 
 -- Criando tabela de transações
@@ -23,7 +23,23 @@ CREATE TABLE IF NOT EXISTS transactions(
 );
 
 
--- Inserindo algumas contas 
+-- Criando tabela de transferências
+CREATE TABLE IF NOT EXISTS transfer_transactions(
+	id BIGSERIAL PRIMARY KEY,
+  	origin_account_id INT NOT NULL,
+  	destination_account_id INT NOT NULL,
+  	transaction_id INT NOT NULL,
+ 	FOREIGN KEY (origin_account_id) REFERENCES accounts(id),
+  	FOREIGN KEY (destination_account_id) REFERENCES accounts(id),
+  	FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+
+
+-- Inserindo index para busca por tipo de transferência
+CREATE INDEX ON transactions(type);
+
+
+-- Inserindo contas 
 INSERT INTO 
 	accounts (agency, acc_number)
 VALUES 
@@ -51,11 +67,8 @@ VALUES
     ('withdraw', '2021-12-12', 160, 2),
     ('withdraw', '2021-12-18', 1000, 7),
     ('ticket_payment', '2021-12-20', 256.98, 7),
-    ('transfer_from_bank', '2022-01-02', 100, 6),
-    ('transfer_to_bank', '2022-01-24', 300, 2),
     ('ticket_payment', '2022-01-28', 160, 6),
     ('withdraw', '2022-01-30', 120, 7),
-    ('transfer_to_bank', '2022-02-05', 120, 7),
     ('withdraw', '2022-02-08', 280, 7),
     ('deposit', '2022-02-08', 300, 3),
     ('deposit', '2022-02-12', 1000, 4),
@@ -67,7 +80,6 @@ VALUES
     ('deposit', '2022-03-07', 70, 1),
     ('deposit', '2022-03-11', 120, 3),
     ('ticket_payment', '2022-03-11', 119.99, 3),
-    ('transfer_to_bank', '2022-03-16', 60, 4),
     ('withdraw', '2022-03-17', 400, 7),
     ('ticket_payment', '2022-03-20', 256.98, 7),
     ('ticket_payment', '2022-03-26', 119.99, 6),
@@ -99,8 +111,8 @@ VALUES
     ('ticket_payment', '2022-06-20', 111.20, 4),
     ('ticket_payment', '2022-06-24', 89.90, 10),
 	('deposit', '2022-06-29', 3893.34, 1)
-    ;
-    
+;
+
     
 -- Inserindo transações 2022.2
 INSERT INTO 
@@ -123,7 +135,6 @@ VALUES
     ('ticket_payment', '2022-09-04', 48.89, 4),
     ('withdraw', '2022-09-11', 90, 3),
     ('deposit', '2022-09-18', 460, 10),
-    ('transfer_to_bank', '2022-09-22', 460, 10),
     ('deposit', '2022-09-26', 180, 4),
     ('deposit', '2022-09-30', 600, 6),
     ('deposit', '2022-09-30', 3500, 9),
@@ -153,8 +164,32 @@ VALUES
  ;	
  
  
+-- Inserindo transferências 2022
+-- (No backend, o melhor provavelmente seria uma transação atômica, para nos certificarmos de que toda transação do tipo transferência
+-- registraria não apenas a transação em si como também as informações de conta origem e destino na tabela transfer_transactions)
+INSERT INTO
+	transactions (type, transaction_date, transaction_value, account_id)
+VALUES
+	('transfer_payment', '2022-02-05', 120, 7),
+	('transfer_receipt', '2022-01-02', 100, 6),
+	('transfer_payment', '2022-01-24', 300, 2),
+	('transfer_payment', '2022-03-16', 60, 4),
+	('transfer_payment', '2022-09-22', 460, 10)
+;
 
--- Criando índice para tipo de transação 
+INSERT INTO
+	transfer_transactions (origin_account_id, destination_account_id, transaction_id)
+VALUES
+	(7, 1, (SELECT id FROM transactions t WHERE t.type = 'transfer_payment' AND t.transaction_date = '2022-02-05' AND t.account_id = 7)),
+	(6, 10, (SELECT id FROM transactions t WHERE t.type = 'transfer_receipt' AND t.transaction_date = '2022-01-02' AND t.account_id = 6)),
+	(2, 4, (SELECT id FROM transactions t WHERE t.type = 'transfer_payment' AND t.transaction_date = '2022-01-24' AND t.account_id = 2)),
+	(4, 8, (SELECT id FROM transactions t WHERE t.type = 'transfer_payment' AND t.transaction_date = '2022-03-16' AND t.account_id = 4)),
+	(10, 3, (SELECT id FROM transactions t WHERE t.type = 'transfer_payment' AND t.transaction_date = '2022-09-22' AND t.account_id = 10))
+;
+	
+ 
+
+-- Criando índice parcial para busca de pagamentos de boletos 
 CREATE INDEX ON transactions(type, transaction_date) WHERE type = 'ticket_payment';
 
 
